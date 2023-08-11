@@ -98,8 +98,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas = pg.plot()
         self.scatter = None
         self.canvas.showGrid(x=True, y=True)
-        self.canvas.setXRange(-120, 120)
-        self.canvas.setYRange(-80, 80)
+        # A hockey arena is 200 x 805 ft. The coordinates are [-100, 100] and [-42.5, 42.5]
+        # lets provide a slight buffer here.
+        self.canvas.setXRange(-105, 105)
+        self.canvas.setYRange(-45, 45)
         
         # main Container
         mainContainer = QWidget()

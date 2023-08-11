@@ -19,7 +19,7 @@ class MainWindow(QtWidgets.QMainWindow):
         container.setLayout(containerLayout)
 
         # select * from the table containing all players where the position is goalie
-        conn = sqlite3.connect("nhl_players.db")
+        conn = sqlite3.connect("nhl.db")
         curr = conn.cursor()
 
 
@@ -31,7 +31,7 @@ class MainWindow(QtWidgets.QMainWindow):
         }
         queryable = ", ".join([x for x in selection.keys()])
 
-        curr.execute(f"SELECT {queryable} FROM players WHERE position='Goalie'")
+        curr.execute(f"SELECT {queryable} FROM players")
         rows = curr.fetchall()
         data = rows
 

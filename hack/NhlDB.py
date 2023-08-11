@@ -196,7 +196,7 @@ currentDir = "/".join(splitDir)
 dbfile = os.path.join(currentDir, "app/nhl.db")
 
 
-con = sqlite3.connect(db_file)
+con = sqlite3.connect(dbfile)
 cur = con.cursor()
 # only create the tables we need if they dont already exist
 cur.execute("CREATE TABLE IF NOT EXISTS players(playerId, firstName, lastName, shootsCatches)")

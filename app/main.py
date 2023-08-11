@@ -11,10 +11,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 import sqlite3
-import numpy as np
-from matplotlib import pyplot as plt
+import pyqtgraph as pg
 
-        
+
 class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
@@ -91,9 +90,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # The event table will only show data when a player has been selected 
         self.eventTable = QTableWidget()
         self.eventTable.setColumnCount(len(self.eventSelection))
-
+        
         # controls the season number for the display 
         self.seasonComboBox = QComboBox()
+
+        # display to show where goals/shots have been scored
+        self.canvas = pg.plot()
+        self.scatter = None
+        self.canvas.showGrid(x=True, y=True)
+        self.canvas.setXRange(-120, 120)
+        self.canvas.setYRange(-80, 80)
         
         # main Container
         mainContainer = QWidget()
@@ -113,6 +119,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Fill in the widget information for the display
         rightContainerLayout.addWidget(self.seasonComboBox)
         rightContainerLayout.addWidget(self.eventTable)
+        rightContainerLayout.addWidget(self.canvas)
         
         # Add the left and right components to the main container
         mainContainerLayout.addWidget(leftContainer)
@@ -139,6 +146,10 @@ class MainWindow(QtWidgets.QMainWindow):
         # clear out the combo box too
         self.seasonComboBox.clear()
 
+        # clear the current canvas
+        if self.scatter:
+            self.scatter.clear()
+        
         rows = set()
         items = self.playerTable.selectedItems()
         for item in items:
@@ -164,13 +175,21 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         while self.eventTable.rowCount() > 0:
             self.eventTable.removeRow(0)
-        
+
+        # clear the canvas so that we can redraw later
+        if self.scatter:
+            self.scatter.clear()
+            
         season = self.seasonComboBox.itemText(index)
         season = season.replace(" - ", "")
 
         if self.activePlayerId is not None:
             if self.activePlayerId in self.goalieEvents and \
                season in self.goalieEvents[self.activePlayerId]:
+
+                xData = []
+                yData = []
+                
                 events = self.goalieEvents[self.activePlayerId][season]
 
                 self.eventTable.setRowCount(len(events))
@@ -179,6 +198,14 @@ class MainWindow(QtWidgets.QMainWindow):
                     for c in range(len(self.eventSelection)):
                         item = QTableWidgetItem(str(events[r][c]))
                         self.eventTable.setItem(r, c, item)
+
+                    xData.append(float(events[r][len(self.eventSelection)-2]))
+                    yData.append(float(events[r][len(self.eventSelection)-1]))
+
+
+            # TODO: color different types of events differently
+            # TODO: Create analysis of the results
+            self.scatter = self.canvas.plot(xData, yData, pen=None, symbol='o')
 
         
     def search(self, s):

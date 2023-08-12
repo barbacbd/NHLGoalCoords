@@ -31,13 +31,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # rows that will be a part of the query and ultimately the display for
         # the player table
-        playerSelection = {
+        self.playerSelection = {
             "playerId": "Player ID",
             "firstName": "First Name",
             "lastName": "Last Name",
             "shootsCatches": "Catches"
         }
-        queryable = ", ".join([x for x in playerSelection.keys()])
+        queryable = ", ".join([x for x in self.playerSelection.keys()])
 
         curr.execute(f"SELECT {queryable} FROM players")
         rows = curr.fetchall()
@@ -45,14 +45,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.playerTable = QTableWidget()
         self.playerTable.setRowCount(len(rows))
-        self.playerTable.setColumnCount(len(playerSelection))
+        self.playerTable.setColumnCount(len(self.playerSelection))
+        self.playerTable.setHorizontalHeaderLabels(list(self.playerSelection.values()))
 
         self.rowWidgets = []
         
         # This seems like a bad way of doing things but let's brute force
         # fill the table with all of the Goalie information
         for r in range(len(rows)):
-            for c in range(len(playerSelection)):
+            for c in range(len(self.playerSelection)):
                 item = QTableWidgetItem(str(rows[r][c]))
                 self.rowWidgets.append(item)
                 self.playerTable.setItem(r, c, item)
@@ -90,6 +91,18 @@ class MainWindow(QtWidgets.QMainWindow):
         # The event table will only show data when a player has been selected 
         self.eventTable = QTableWidget()
         self.eventTable.setColumnCount(len(self.eventSelection))
+        self.eventTable.setHorizontalHeaderLabels(list(self.eventSelection.values()))
+
+        # The evaluation table will only show data when a season is selected
+        self.evalTable = QTableWidget()
+        # Columns = side (glove vs stick), shots, goals, save percentage
+        # The side will indicate the rows (should always be 2)
+        self.evalTable.setColumnCount(4)
+        self.evalTable.setHorizontalHeaderLabels(["Shot Side", "Shots", "Goals", "Save Percentage"])
+
+        self.evalTable.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
+        self.evalTable.resizeColumnsToContents()
+
         
         # controls the season number for the display 
         self.seasonComboBox = QComboBox()
@@ -122,6 +135,7 @@ class MainWindow(QtWidgets.QMainWindow):
         rightContainerLayout.addWidget(self.seasonComboBox)
         rightContainerLayout.addWidget(self.eventTable)
         rightContainerLayout.addWidget(self.canvas)
+        rightContainerLayout.addWidget(self.evalTable)
         
         # Add the left and right components to the main container
         mainContainerLayout.addWidget(leftContainer)
@@ -134,6 +148,14 @@ class MainWindow(QtWidgets.QMainWindow):
         # Set the main widget 
         self.setCentralWidget(mainContainer)
 
+    def _get_player_table_rows(self):
+        rows = set()
+        items = self.playerTable.selectedItems()
+        for item in items:
+            rows.add(item.row())
+        rows = list(rows)
+        return rows
+        
     def table_selection_changed(self):
         """
         When the table has a selected item then it will change the display of the right
@@ -145,6 +167,10 @@ class MainWindow(QtWidgets.QMainWindow):
         while self.eventTable.rowCount() > 0:
             self.eventTable.removeRow(0)
 
+        # clear the table containing the save percentage info
+        while self.evalTable.rowCount() > 0:
+            self.evalTable.removeRow(0)
+            
         # clear out the combo box too
         self.seasonComboBox.clear()
 
@@ -152,11 +178,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.scatter:
             self.scatter.clear()
         
-        rows = set()
-        items = self.playerTable.selectedItems()
-        for item in items:
-            rows.add(item.row())
-        rows = list(rows)
+        rows = self._get_player_table_rows()
             
         if len(rows) == 1:
             # set the combo box
@@ -178,6 +200,9 @@ class MainWindow(QtWidgets.QMainWindow):
         while self.eventTable.rowCount() > 0:
             self.eventTable.removeRow(0)
 
+        while self.evalTable.rowCount() > 0:
+            self.evalTable.removeRow(0)
+
         # clear the canvas so that we can redraw later
         if self.scatter:
             self.scatter.clear()
@@ -185,15 +210,29 @@ class MainWindow(QtWidgets.QMainWindow):
         season = self.seasonComboBox.itemText(index)
         season = season.replace(" - ", "")
 
+        xData = []
+        yData = []
+        records = {
+            "left": {
+                "side": "",
+                "shots": 0,
+                "goals": 0,
+                "savePercentage": 0.0
+            },
+            "right": {
+                "side": "",
+                "shots": 0,
+                "goals": 0,
+                "savePercentage": 0.0
+            }
+        }
+        setRecords = False
+                        
         if self.activePlayerId is not None:
             if self.activePlayerId in self.goalieEvents and \
                season in self.goalieEvents[self.activePlayerId]:
-
-                xData = []
-                yData = []
-                
                 events = self.goalieEvents[self.activePlayerId][season]
-
+                
                 self.eventTable.setRowCount(len(events))
                 
                 for r in range(len(events)):
@@ -201,13 +240,69 @@ class MainWindow(QtWidgets.QMainWindow):
                         item = QTableWidgetItem(str(events[r][c]))
                         self.eventTable.setItem(r, c, item)
 
-                    xData.append(float(events[r][len(self.eventSelection)-2]))
-                    yData.append(float(events[r][len(self.eventSelection)-1]))
+                    if events[r][len(self.eventSelection)-2] == '' or \
+                       events[r][len(self.eventSelection)-1] == '':
+                        continue
+                    
+                    xcoord = float(events[r][len(self.eventSelection)-2])
+                    xData.append(xcoord)
+                    ycoord = float(events[r][len(self.eventSelection)-1]) 
+                    yData.append(ycoord)
+                    
+                    if events[r][0] in ("Goal", "Blocked Shot", "Shot"):
+                        shotToSide = "right"  # Q2 or Q4 - this is a shot to the goalies left
+                        if (xcoord >= 0 and ycoord >= 0) or (xcoord < 0 and ycoord < 0):
+                            # Q1 or Q3 - this is a shot to the goalies right
+                            shotToSide = "left"
+                        if shotToSide in records:
+                            if events[r][0] == "Goal":
+                                records[shotToSide]["goals"] += 1
+                            records[shotToSide]["shots"] += 1
 
+                    setRecords = True
+                    
 
-            # TODO: color different types of events differently
-            # TODO: Create analysis of the results
-            self.scatter = self.canvas.plot(xData, yData, pen=None, symbol='o')
+                # Columns = side (glove vs stick), shots, goals, save percentage
+                # The side will indicate the rows (should always be 2)
+                rows = self._get_player_table_rows()
+                if len(rows) == 1 and setRecords:
+                    shootsCatches = self.playerTable.item(rows[0], len(self.playerSelection)-1).text()
+
+                    if shootsCatches == "L":  # more than likely right handed
+                        records["left"]["side"] = "glove"
+                        records["right"]["side"] = "stick"
+                    else:
+                        records["left"]["side"] = "stick"
+                        records["right"]["side"] = "glove"
+
+                    weakKey = None
+                    weakPercent = 100
+                    for key, value in records.items():
+                        savePercent = float(value["shots"] - value["goals"]) / float(value["shots"]) * 100.0
+                        records[key]["savePercentage"] = savePercent
+
+                        if savePercent < weakPercent:
+                            weakPercent = savePercent
+                            weakKey = key
+                        
+                    # update the eval table
+                    self.evalTable.setRowCount(len(records))
+                    keys = list(records.keys())
+                    for r in range(len(records)):
+                        shouldHighlight = keys[r] == weakKey
+                        
+                        innerKeys = list(records[keys[r]].keys())
+                        for c in range(len(records[keys[r]])):
+                            item = QTableWidgetItem(str(records[keys[r]][innerKeys[c]]))
+
+                            # highlight the cells where the key is the weaker of the sides
+                            if shouldHighlight:
+                                item.setBackground(QtGui.QColor(255, 255, 0))
+                            
+                            self.evalTable.setItem(r, c, item)
+                        
+            # pen=None disables line drawing
+            self.scatter = self.canvas.plot(xData, yData, pen=None, symbol='+')
 
         
     def search(self, s):

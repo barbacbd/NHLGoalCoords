@@ -87,6 +87,16 @@ A: _In this particular year, I would say yes. However, analyzing his other years
 
 - Remove shots and goals where the shot occurred within a certain distance of goal. _Why?_ These events could be assumed to close and skew the data. There are a lot of goals picked up off of rebounds or scuffles in front of the net. 
 
+# Retrieving The Data
+
+_Note: Before starting this process, remove `ReadFiles.json` in `./hack` to ensure that all data is pulled._
+
+- Pull the latest from [nhl](https://github.com/barbacbd/nhl).
+- Locally install the nhl library.
+- Move to the [hack](./hack/) directory of this project. 
+- Execute the [NHLAPIPuller](./hack/NHLAPIPuller.py) script to pull all of the data. This will create a directory called `nhl_data` that contains all of the years selected by the user (default is all). _Note: This will take a while to grab all of the data._
+- Execute the [NhlDB](./hack/NhlDB.py) script to convert the data from the previous step into a sqlite database. _Note: This is not saved in this project because of the file size._
+- There are corrections required to some of the player info, execute the [Corrections](./hack/Corrections.py) script. _Note: Technically this should not change any players that contain data with coordinates attached.
 
 # Disclaimers
 
@@ -95,7 +105,6 @@ _The application can only be used for goalies that have played in more recent ye
 _"Missed shots" from the NHL live game data are Not calculated into the percentage. If the goalie did NOT have to act, then it is not counted._
 
 _The data loaded for this study only contains live game data for Regular season games._
-
 
 # Copyright
 
